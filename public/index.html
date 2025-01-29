@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crazy Chat App</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Creepster', cursive;
+        }
+    
+        body {
+            background: linear-gradient(135deg, #ff0080, #8000ff);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #fff;
+            overflow: hidden;
+        }
+    
+        header {
+            font-size: 3rem;
+            font-family: 'Press Start 2P', cursive;
+            color: #ffcc00; /* Change this to a new color you prefer */
+            text-shadow: 4px 4px 0px #000, 8px 8px 5px rgba(255, 255, 255, 0.3);
+            margin-bottom: 50px;     
+      
+        }
+    
+        .container {
+            width: 90%;
+            max-width: 500px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+            transition: transform 0.5s ease-in-out;
+        }
+    
+        #login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 20px;
+        }
+    
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ffcc00;
+            border-radius: 20px;
+            outline: none;
+            font-size: 1.2rem;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffcc00;
+        }
+    
+        button {
+            padding: 12px 20px;
+            background-color: #ffcc00;
+            border: none;
+            border-radius: 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Press Start 2P', cursive;
+        }
+    
+        button:hover {
+            background-color: #ffeb3b;
+            transform: scale(1.1);
+        }
+    
+        #chat-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+    
+        #chat {
+            width: 100%;
+            height: 250px;
+            overflow-y: auto;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+    
+        .message {
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+            font-size: 1rem;
+        }
+    
+        .my-message {
+            background: #4CAF50;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+    
+        .other-message {
+            background: #e2e2e2;
+            color: #333;
+            text-align: left;
+        }
+    
+        #input-area {
+            display: flex;
+            width: 100%;
+            gap: 10px;
+        }
+    
+        #message {
+            flex-grow: 1;
+        }
+    
+        /* Updated responsiveness */
+        @media (max-width: 1024px) {
+            header {
+                font-size: 2.5rem;
+            }
+            .container {
+                width: 90%;
+                height: auto;
+            }
+        }
+    
+        @media (max-width: 768px) {
+            header {
+                font-size: 2rem;
+            }
+            .container {
+                width: 90%;
+                padding: 15px;
+            }
+        }
+    
+        @media (max-width: 480px) {
+            header {
+                font-size: 1.8rem;
+            }
+            .container {
+                width: 95%;
+            }
+            #chat {
+                height: 200px;
+            }
+        }
+    </style>
+    
+</head>
+<body>
+
+    <header id="chatHeader">Welcome to Crazy Chat!</header>
+
+    <div class="container" id="login-container">
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Enter your name" required />
+            <input type="email" id="email" placeholder="Enter your email" required />
+            <button id="loginButton" type="submit">Join Chat</button>
+        </form>
+    </div>
+
+    <div class="container" id="chat-container">
+        <h2 id="welcomeMessage"></h2>
+        <div id="chat"></div>
+        <div id="input-area">
+            <input type="text" id="message" placeholder="Type something cool..." />
+            <button id="sendButton" disabled>Send</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        socket.on("connect", () => console.log("✅ Connected to server"));
+        socket.on("message", (msg) => appendMessage(msg, false));
+
+        const loginContainer = document.getElementById("login-container");
+        const chatContainer = document.getElementById("chat-container");
+        const loginForm = document.getElementById("login-form");
+        const usernameInput = document.getElementById("username");
+        const welcomeMessage = document.getElementById("welcomeMessage");
+
+        // CRAZY UI ANIMATION FOR LOGIN
+        gsap.from(".container", {
+            opacity: 0,
+            scale: 0.5,
+            y: 50,
+            duration: 1.2,
+            ease: "power3.out"
+        });
+
+        loginForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            if (username) {
+                welcomeMessage.innerHTML = `Welcome, <strong>${username}</strong>! 🎉`;
+
+                gsap.to(loginContainer, {
+                    opacity: 0,
+                    y: -50,
+                    scale: 0.5,
+                    duration: 1,
+                    ease: "back.in(1.7)",
+                    onComplete: () => {
+                        loginContainer.style.display = "none";
+                        chatContainer.style.display = "flex";
+
+                        gsap.from(chatContainer, {
+                            opacity: 0,
+                            scale: 0.8,
+                            duration: 1.2,
+                            ease: "elastic.out(1.2, 0.5)"
+                        });
+                    }
+                });
+            }
+        });
+
+        const sendButton = document.getElementById("sendButton");
+        const messageInput = document.getElementById("message");
+        const chat = document.getElementById("chat");
+
+        function appendMessage(message, isMine = false) {
+            const msgDiv = document.createElement("div");
+            msgDiv.textContent = message;
+            msgDiv.classList.add("message", isMine ? "my-message" : "other-message");
+            chat.appendChild(msgDiv);
+            chat.scrollTop = chat.scrollHeight;
+
+            gsap.from(msgDiv, {
+                opacity: 0,
+                y: -30,
+                rotation: Math.random() * 20 - 10,
+                scale: 0.8,
+                duration: 0.6,
+                ease: "bounce.out"
+            });
+        }
+
+        sendButton.addEventListener("click", () => {
+            const message = messageInput.value.trim();
+            if (message) {
+                appendMessage(message, true);
+                socket.emit("chatMessage", message);
+                messageInput.value = "";
+            }
+        });
+
+        messageInput.addEventListener("input", () => sendButton.disabled = !messageInput.value.trim());
+    </script>
+</body>
+</html>
